@@ -3,7 +3,7 @@ import argparse
 
 import tvm
 from tvm import relay, autotvm
-from tvm.autotvm.tuner import XGBTuner, GATuner, RandomTuner, GridSearchTuner
+from tvm.autotvm.tuner import XGBTuner, GATuner, RandomTuner, GridSearchTuner, TreeGRUTuner
 from tvm.autotvm.graph_tuner import DPTuner, PBQPTuner
 
 from utils import get_network, make_network_key, use_graph_tuner
@@ -78,6 +78,7 @@ def get_tuning_option(network, batch_size, dtype, target, log_file):
                 ),
             ),
         }
+        
 
     return tuning_option
 
@@ -107,6 +108,8 @@ def tune_kernels(
             tuner_obj = GATuner(tsk, pop_size=100)
         elif tuner == "gridsearch":
             tuner_obj = GridSearchTuner(tsk)
+        elif tuner == "treegru":
+            tuner_obj = TreeGRUTuner(tsk)
         else:
             raise ValueError("Invalid tuner: " + tuner)
 
