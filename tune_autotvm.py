@@ -22,7 +22,7 @@ def autotvm_tune(network, batch_size, dtype, target, log_prefix):
     mod, params, input_name, input_shape, output_shape = get_network(
         network, batch_size, dtype, layout
     )
-    tuning_opt = get_tuning_option(network, batch_size, dtype, target, kernel_log)
+    tuning_opt = get_tuning_option(network, batch_size, dtype, target, kernel_log, args.tuner)
     ops = [
         relay.op.get("nn.batch_matmul"),
         relay.op.get("nn.dense"),
@@ -38,9 +38,10 @@ def autotvm_tune(network, batch_size, dtype, target, log_prefix):
         tune_graph(mod["main"], input_name, input_shape, target, kernel_log, graph_log)
 
 
-def get_tuning_option(network, batch_size, dtype, target, log_file):
+def get_tuning_option(network, batch_size, dtype, target, log_file, tuner=None):
     if "cpu" in target.keys:
-        if use_graph_tuner(network, batch_size, dtype, target):
+        if tuner == None and use_graph_tuner(network, batch_size, dtype, target):
+                
             tuning_option = {
                 "log_filename": log_file,
                 "tuner": "random",
@@ -52,7 +53,23 @@ def get_tuning_option(network, batch_size, dtype, target, log_file):
                     runner=autotvm.LocalRunner(number=10, repeat=1, min_repeat_ms=1000),
                 ),
             }
+            
+        elif tuner == 'treegru':
+                
+            tuning_option = {
+                "log_filename": log_file,
+                "tuner": "treegru",
+                "n_trial": 1500,
+                "early_stopping": 600,
+                "use_transfer_learning": True,
+                "measure_option": autotvm.measure_option(
+                    builder=autotvm.LocalBuilder(timeout=10),
+                    runner=autotvm.LocalRunner(number=10, repeat=1, min_repeat_ms=1000),
+                ),
+            }
+            
         else:
+
             tuning_option = {
                 "log_filename": log_file,
                 "tuner": "xgb",
@@ -64,6 +81,7 @@ def get_tuning_option(network, batch_size, dtype, target, log_file):
                     runner=autotvm.LocalRunner(number=10, repeat=1, min_repeat_ms=1000),
                 ),
             }
+            
     else:
         tuning_option = {
             "log_filename": log_file,
@@ -96,9 +114,10 @@ def tune_kernels(
         prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
 
         # create tuner
-        if tuner == "random" or n_trial >= len(tsk.config_space):
-            tuner_obj = RandomTuner(tsk)
-        elif tuner == "xgb" or tuner == "xgb-rank":
+        # if tuner == "random" or n_trial >= len(tsk.config_space):
+        #     tuner_obj = RandomTuner(tsk)
+        # elif tuner == "xgb" or tuner == "xgb-rank":
+        if tuner == "xgb" or tuner == "xgb-rank":
             tuner_obj = XGBTuner(tsk, loss_type="rank")
             # use history data to pre-train the cost model
             if use_transfer_learning:
@@ -160,6 +179,9 @@ if __name__ == "__main__":
     parser.add_argument("--dtype", type=str, default="float32", help="The data type.")
     parser.add_argument(
         "--logdir", type=str, default="tmp_logs/", help="Log file directory."
+    )
+    parser.add_argument(
+        "--tuner", type=str, default="xgb", help="Type of tuner (xgb or treegru)."
     )
     args = parser.parse_args()
 
